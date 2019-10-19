@@ -1,0 +1,10 @@
+Before he runs the Producer, he creates the topic in Kafka (I did this yay).
+HE used six partitions... idk why exactly.
+
+he also runs a consumer from the CLI... b/c
+$ kafka-console-consumer --bootstrap-server 127.0.0.1:9092 --topic twitter_tweets
+
+He included a call back after his send method, which I probably didn't do...
+wait actually I did do that, yay! :D
+
+
