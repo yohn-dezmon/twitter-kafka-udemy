@@ -28,7 +28,17 @@ import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 
 public class TwitterElasticConsumer {
-    private RestHighLevelClient client;
+//    private RestHighLevelClient client;
+
+    public static RestHighLevelClient createClient() {
+
+        RestHighLevelClient client = new RestHighLevelClient(
+                RestClient.builder(
+                        new HttpHost("localhost", 9200, "http"),
+                        new HttpHost("localhost", 9201, "http")));
+
+    return client;
+    }
 
     public static void main(String[] args) throws IOException {
 
@@ -44,6 +54,8 @@ public class TwitterElasticConsumer {
     private void run() {
         // if you miss the tab for the class, you can get back to that
         // drop down menu with alt+Tab
+
+
         Logger logger = LoggerFactory.getLogger(TwitterElasticConsumer.class.getName());
         String bootstrapServers = "127.0.0.1:9092";
         String groupId = "my-twitter-application";
@@ -94,9 +106,9 @@ public class TwitterElasticConsumer {
 
 
         public ConsumerRunnable(String bootstrapServers,
-                              String groupId,
-                              String topic,
-                              CountDownLatch latch) {
+                                String groupId,
+                                String topic,
+                                CountDownLatch latch) {
             this.latch = latch;
 
             // New consumer configs (Kafka docs)
@@ -117,20 +129,19 @@ public class TwitterElasticConsumer {
 //        consumer.subscribe(Collections.singleton("first_topic"));
             consumer.subscribe(Arrays.asList(topic));
 
-            client = new RestHighLevelClient(
-                    RestClient.builder(
-                            new HttpHost("localhost", 9200, "http"),
-                            new HttpHost("localhost", 9201, "http")));
 
         }
 
         @Override
         public void run() {
+            RestHighLevelClient client = createClient();
             try {
                 while (true) {
                     // set language to 8
                     ConsumerRecords<String, String> records =
                             consumer.poll(Duration.ofMillis(100)); // new in Kafka 2.0.0
+
+
                     // the consumer will read all of the data from one partition, then move onto another partiton
                     // unless you have a producer with a KEY, in which case messages will be read in chronological order
                     for (ConsumerRecord<String, String> record : records) {
@@ -140,42 +151,49 @@ public class TwitterElasticConsumer {
                         // Do I need to create the index manually with Elasticsearch before doing this?
                         // I think this should automatically create the climatechange index...
                         IndexRequest request = new IndexRequest(
-                                "climatechange",
-                                "doc",
-                                record.key());
-                        String jsonString = record.value();
+                                "climatechangetwitter",
+                                "tweets"
+                                );
+                        request.id(record.key());
+                        //record.key()
+//                        String jsonString = record.value();
+                        String jsonString = "{ \"foo\": \"bar\" }";
                         request.source(jsonString, XContentType.JSON);
+
+                        IndexResponse indexResponse = client.index(request, RequestOptions.DEFAULT);
+                        String id = indexResponse.getId();
+                        logger.info(id);
 
 
                         // INDEX RESPONSE
-                        try {
-                            IndexResponse indexResponse = client.index(request, RequestOptions.DEFAULT);
-                            String index = indexResponse.getIndex();
-                            String type = indexResponse.getType();
-                            String id = indexResponse.getId();
-                            long version = indexResponse.getVersion();
-                            if (indexResponse.getResult() == DocWriteResponse.Result.CREATED) {
-                                logger.info("Data Inserted into: "+ "climatechange index");
-
-                            } else if (indexResponse.getResult() == DocWriteResponse.Result.UPDATED) {
-                                logger.info("Data already exists for ${id}, so it has been updated");
-                            }
-                            ReplicationResponse.ShardInfo shardInfo = indexResponse.getShardInfo();
-                            if (shardInfo.getTotal() != shardInfo.getSuccessful()) {
-                                logger.info("ShardInfo getSuccessful...?");
-
-                            }
-                            if (shardInfo.getFailed() > 0) {
-                                for (ReplicationResponse.ShardInfo.Failure failure : shardInfo.getFailures()) {
-                                    String reason = failure.reason();
-                                }
-                            }
-                        } catch (ElasticsearchException e) {
-
-                            if (e.status() == RestStatus.CONFLICT) {
-                                e.printStackTrace();
-                            }
-                        }
+//                        try {
+//                            IndexResponse indexResponse = client.index(request, RequestOptions.DEFAULT);
+//                            String index = indexResponse.getIndex();
+//                            String type = indexResponse.getType();
+//                            String id = indexResponse.getId();
+//                            long version = indexResponse.getVersion();
+//                            if (indexResponse.getResult() == DocWriteResponse.Result.CREATED) {
+//                                logger.info("Data Inserted into: "+ "climatechange index");
+//
+//                            } else if (indexResponse.getResult() == DocWriteResponse.Result.UPDATED) {
+//                                logger.info("Data already exists for ${id}, so it has been updated");
+//                            }
+//                            ReplicationResponse.ShardInfo shardInfo = indexResponse.getShardInfo();
+//                            if (shardInfo.getTotal() != shardInfo.getSuccessful()) {
+//                                logger.info("ShardInfo getSuccessful...?");
+//
+//                            }
+//                            if (shardInfo.getFailed() > 0) {
+//                                for (ReplicationResponse.ShardInfo.Failure failure : shardInfo.getFailures()) {
+//                                    String reason = failure.reason();
+//                                }
+//                            }
+//                        } catch (ElasticsearchException e) {
+//
+//                            if (e.status() == RestStatus.CONFLICT) {
+//                                e.printStackTrace();
+//                            }
+//                        }
 
 
 
