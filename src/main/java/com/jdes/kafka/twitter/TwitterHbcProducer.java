@@ -27,7 +27,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class TwitterHbcProducer {
 
     public static void main(String[] args) throws InterruptedException {
-
+        // connecting to Twitter API
         Properties propertiez = new Properties();
 
         try (FileReader reader = new FileReader("config")) {
@@ -95,7 +95,11 @@ public class TwitterHbcProducer {
             String key = "id_" + Integer.toString(msgRead);
             // create a producer record
             ProducerRecord<String, String> record = new ProducerRecord<String, String>("climatechange",
-                    key,msg + Integer.toString(msgRead));
+                    key,msg);
+                    // ok this was after msg in the ProducerRecord arguments,
+                    // may have been messing up my consumer down the line: + Integer.toString(msgRead)
+                    // also he has his key set to null, which might help me too.
+
 
             // send data - asynchronous!
             producer.send(record, new Callback() {
@@ -131,5 +135,3 @@ public class TwitterHbcProducer {
 
 
     }
-
-

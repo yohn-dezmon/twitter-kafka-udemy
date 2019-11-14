@@ -1,5 +1,6 @@
 package com.jdes.kafka.twitter;
 
+import com.google.gson.JsonParser;
 import org.apache.http.HttpHost;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
@@ -7,6 +8,8 @@ import org.apache.http.client.CredentialsProvider;
 import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.nio.client.HttpAsyncClientBuilder;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.elasticsearch.action.index.IndexRequest;
@@ -21,6 +24,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.FileReader;
 import java.io.IOException;
+import java.time.Duration;
+import java.util.Arrays;
 import java.util.Properties;
 
 public class TutorialConsumer {
@@ -28,7 +33,7 @@ public class TutorialConsumer {
     // TwitterElasticConsumer was conncecting to the ES that I dl'd on my lapto
 
     public static RestHighLevelClient createClient() {
-
+        // these propertiez allow us to access bonsai
         Properties propertiez = new Properties();
 
         try (FileReader reader = new FileReader("config")) {
@@ -72,11 +77,11 @@ public class TutorialConsumer {
         return client;
 }
 
-    public static KafkaConsumer<String, String> createConsumer() {
+    public static KafkaConsumer<String, String> createConsumer(String topic) {
         String bootstrapServers = "127.0.0.1:9092";
         // you can change the groupId to get the data from the beginning of the offsets
         String groupId = "kafka-demo-elasticsearch";
-        String topic = "twitter_tweets";
+//        String topic = "twitter_tweets";
 
         // New consumer configs (Kafka docs)
         Properties properties = new Properties();
@@ -90,6 +95,9 @@ public class TutorialConsumer {
         // create consumer
         KafkaConsumer<String, String> consumer =
                 new KafkaConsumer<String, String>(properties);
+        consumer.subscribe(Arrays.asList(topic));
+
+        return consumer;
     }
 
     public static void main(String[] args) throws IOException {
@@ -97,23 +105,66 @@ public class TutorialConsumer {
         Logger logger = LoggerFactory.getLogger(TutorialConsumer.class.getName());
         RestHighLevelClient client = createClient();
 
-        String jsonString = "{ \"foo\": \"bar\" }";
+//        String jsonString = "{ \"foo\": \"bar\" }";
 
-        // index, type, id...
-        // this will fail unless the twitter index exists...
-        IndexRequest indexRequest = new IndexRequest(
-                "twitter",
-                "tweets"
-        ).source(jsonString, XContentType.JSON);
 
-        IndexResponse indexResponse = client.index(indexRequest, RequestOptions.DEFAULT);
-    String id = indexResponse.getId();
-    logger.info(id);
+
+
+
+    KafkaConsumer<String, String> consumer = createConsumer("twitter_tweets");
+
+        while (true) {
+            // set language to 8
+            ConsumerRecords<String, String> records =
+                    consumer.poll(Duration.ofMillis(100)); // new in Kafka 2.0.0
+            // the consumer will read all of the data from one partition, then move onto another partiton
+            // unless you have a producer with a KEY, in which case messages will be read in chronological order
+            for (ConsumerRecord<String, String> record : records) {
+
+                // 2 strategies
+                // kafka generic ID
+                // String id = record.topic() +"_"+ record.partition() +"_"+ record.offset();
+
+                // tiwtter feed specific id
+                String id = extractIdFromTweet(record.value());
+
+                String jsonString = record.value();
+                // where we insert data into ES
+                // index, type, id...
+                // this will fail unless the twitter index exists...
+                IndexRequest indexRequest = new IndexRequest(
+                        "twitter",
+                        "tweets",
+                        id /// to make consumer idempotent
+                ).source(jsonString, XContentType.JSON);
+
+
+                IndexResponse indexResponse = client.index(indexRequest, RequestOptions.DEFAULT);
+
+                logger.info(indexResponse.getId());
+                try {
+                    Thread.sleep(1000); // introduce a small delay
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+
+
+            }
+        }
 
     // close the client gracefully
-    client.close();
+//    client.close();
 
 
+    }
+
+    private static JsonParser jsonParser = new JsonParser();
+
+    private static String extractIdFromTweet(String tweetJson) {
+        // gson library
+        return jsonParser.parse(tweetJson).getAsJsonObject()
+                .get("id_str")
+                .getAsString();
     }
 
 }

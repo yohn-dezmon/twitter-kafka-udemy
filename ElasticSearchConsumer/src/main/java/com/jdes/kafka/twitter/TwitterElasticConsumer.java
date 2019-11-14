@@ -1,6 +1,7 @@
 package com.jdes.kafka.twitter;
 
 
+import com.google.gson.JsonParser;
 import org.apache.http.HttpHost;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -27,6 +28,8 @@ import java.util.Arrays;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 
+// heyo
+
 public class TwitterElasticConsumer {
 //    private RestHighLevelClient client;
 
@@ -49,6 +52,17 @@ public class TwitterElasticConsumer {
 
     private TwitterElasticConsumer() {
 
+    }
+
+    private static JsonParser jsonParser = new JsonParser();
+
+    private static String extractIdFromTweet(String tweetJson) {
+
+
+        // gson library
+        return jsonParser.parse(tweetJson).getAsJsonObject()
+                .get("id_str")
+                .getAsString();
     }
 
     private void run() {
@@ -132,6 +146,8 @@ public class TwitterElasticConsumer {
 
         }
 
+
+
         @Override
         public void run() {
             RestHighLevelClient client = createClient();
@@ -147,22 +163,34 @@ public class TwitterElasticConsumer {
                     for (ConsumerRecord<String, String> record : records) {
                         logger.info("Key: " + record.key() + ", Value: " + record.value());
                         logger.info("Partition: " + record.partition() + ", Offset:" + record.offset());
+//                        String jsonString = "{ \"foo\": \"bar\" }";
 
+
+                        // tiwtter feed specific id
+                        String id = extractIdFromTweet(record.value());
+                     String jsonString = record.value();
+//
                         // Do I need to create the index manually with Elasticsearch before doing this?
                         // I think this should automatically create the climatechange index...
                         IndexRequest request = new IndexRequest(
                                 "climatechangetwitter",
-                                "tweets"
-                                );
-                        request.id(record.key());
+                                "tweets",
+                                id
+                                ).source(jsonString, XContentType.JSON);
+//                        request.id(record.key());
                         //record.key()
-//                        String jsonString = record.value();
-                        String jsonString = "{ \"foo\": \"bar\" }";
-                        request.source(jsonString, XContentType.JSON);
+
+
+//                        request.source(jsonString, XContentType.JSON);
 
                         IndexResponse indexResponse = client.index(request, RequestOptions.DEFAULT);
-                        String id = indexResponse.getId();
-                        logger.info(id);
+//                        String id+ = indexResponse.getId();
+                        logger.info(indexResponse.getId());
+                        try {
+                        Thread.sleep(1000); // introduce a small delay
+                        } catch (InterruptedException e) {
+                        e.printStackTrace();
+                        }
 
 
                         // INDEX RESPONSE
